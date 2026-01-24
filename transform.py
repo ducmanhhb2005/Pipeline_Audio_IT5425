@@ -4,12 +4,11 @@ import librosa
 import numpy as np
 from minio import Minio
 from minio.error import S3Error
-import io # Dùng để đọc object từ MinIO như một file
+import io 
 
-# ----- PHẦN 1: KẾT NỐI VÀ LẤY METADATA -----
+# KẾT NỐI VÀ LẤY METADATA 
 
 print("Đang kết nối tới MinIO...")
-# Cấu hình kết nối tới MinIO
 minio_client = Minio(
     "localhost:9000",
     access_key="minioadmin",
@@ -30,7 +29,7 @@ try:
         print(f"Bucket '{curated_bucket_name}' đã tồn tại.")
 except S3Error as exc:
     print("Lỗi khi tạo bucket:", exc)
-    exit() # Thoát nếu không tạo được bucket
+    exit() 
 
 
 # Tải và đọc file metadata từ MinIO
@@ -42,10 +41,10 @@ try:
     print("Tải và đọc metadata thành công.")
 except S3Error as exc:
     print("Lỗi khi tải metadata:", exc)
-    metadata_df = pd.DataFrame() # Tạo dataframe rỗng nếu lỗi
+    metadata_df = pd.DataFrame() 
     exit()
 
-# ----- PHẦN 2: HÀM TRÍCH XUẤT ĐẶC TRƯNG ÂM THANH -----
+#HÀM TRÍCH XUẤT ĐẶC TRƯNG ÂM THANH 
 
 def extract_features(audio_data, sample_rate):
     """
@@ -68,7 +67,7 @@ def extract_features(audio_data, sample_rate):
     for i in range(len(chroma)):
         features[f'chroma_{i+1}'] = chroma[i]
         
-    # MFCCs (Mel-Frequency Cepstral Coefficients)
+    # MFCCs 
     mfccs = np.mean(librosa.feature.mfcc(y=audio_data, sr=sample_rate, n_mfcc=40).T, axis=0)
     for i in range(len(mfccs)):
         features[f'mfcc_{i+1}'] = mfccs[i]
@@ -79,9 +78,9 @@ def extract_features(audio_data, sample_rate):
         
     return features
 
-# ----- PHẦN 3: XỬ LÝ VÀ BIẾN ĐỔI DỮ LIỆU -----
+# transform 
 
-print("\nBắt đầu quá trình trích xuất đặc trưng... (Sẽ mất khá nhiều thời gian!)")
+print("\nBắt đầu quá trình trích xuất đặc trưng... ")
 extracted_features_list = []
 
 # Lặp qua từng dòng trong metadata DataFrame
@@ -93,7 +92,6 @@ for index, row in metadata_df.iterrows():
         audio_object = minio_client.get_object(audio_bucket_name, file_name)
         
         # Đọc file âm thanh bằng librosa
-        # librosa.load có thể đọc trực tiếp từ một file-like object
         audio_data, sample_rate = librosa.load(io.BytesIO(audio_object.read()), sr=None)
         
         # Trích xuất đặc trưng
@@ -115,8 +113,6 @@ print("Hoàn tất trích xuất đặc trưng!")
 # Chuyển danh sách đặc trưng thành DataFrame
 features_df = pd.DataFrame(extracted_features_list)
 
-# Hợp nhất (merge) DataFrame đặc trưng với DataFrame metadata
-# Dựa trên cột 'file_name' chung
 final_df = pd.merge(metadata_df, features_df, on='file_name', how='inner')
 
 # Lưu DataFrame cuối cùng thành file Parquet
@@ -124,7 +120,7 @@ parquet_path = 'ravdess_features.parquet'
 final_df.to_parquet(parquet_path, index=False)
 print(f"\nĐã tạo file '{parquet_path}' với {len(final_df)} dòng và {len(final_df.columns)} cột.")
 
-# Tải file Parquet đã xử lý lên bucket 'curated-data'
+# Tải file Parquet đã xử lý lên bucket curated-data
 print(f"Đang tải file Parquet lên bucket '{curated_bucket_name}'...")
 try:
     minio_client.fput_object(
@@ -135,5 +131,3 @@ try:
     print("Tải file Parquet thành công!")
 except S3Error as exc:
     print("Lỗi khi tải file Parquet:", exc)
-
-# ----- KẾT THÚC -----
